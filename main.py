@@ -447,21 +447,161 @@ def rel_err_pct(exact: float, est: float) -> float:
 
 
 class MethodModule:
-    """Contract for every method section. Teammates: subclass, set the flags,
-    implement compute() and run()."""
+    """Contract & shared base for all numerical integration methods."""
     key = ""
-    title_key = ""          # translation key of the menu name
-    owner = "-"             # who is responsible (shown on the coming-soon screen)
-    implemented = False     # True  -> appears as a real method everywhere
-    progress = 0            # 0..100 (shown on the coming-soon screen)
+    title_key = ""
+    owner = "-"
+    implemented = False
+    progress = 0
+
+    @staticmethod
+    def nodes(p: Problem, n: int) -> Tuple[float, List[float], List[float]]:
+        h = (p.b - p.a) / n
+        xs = [p.a + i * h for i in range(n + 1)]
+        xs[-1] = p.b
+        return h, xs, [p(x) for x in xs]
+
+    @staticmethod
+    def format_nodes(xs: Sequence[float], fs: Sequence[float], max_rows: int = 12) -> List[str]:
+        rows = [f"x{i} = {x:.6g}   f(x{i}) = {fx:.6f}" for i, (x, fx) in enumerate(zip(xs, fs))]
+        return rows[:4] + [t("more_nodes", k=len(rows) - 6)] + rows[-2:] if len(rows) > max_rows else rows
 
     def compute(self, p: Problem, n: int) -> float:
-        """Return the integral estimate for n segments. Raise ValueError(msg) if n is
-        not allowed (e.g. odd n for Simpson 1/3)."""
         raise NotImplementedError
 
+    def applicable(self, p: Problem, max_exact_deg: int = 1) -> Tuple[bool, str]:
+        try:
+            for i in range(41):
+                p(p.a + (p.b - p.a) * i / 40)
+        except FunctionError as exc:
+            return False, t("applic_no", x=fmt(exc.x), err=exc.msg)
+        msg = t("applic_yes")
+        if p.poly is not None:
+            d = p.poly.degree
+            if max_exact_deg == 1:
+                msg += " " + (t("applic_linear") if d <= 1 else t("applic_poly", d=d))
+            else:
+                msg += " " + (t("simp_applic_poly_exact", d=d) if d <= max_exact_deg else t("simp_applic_poly_err", d=d))
+        return True, msg
+
+    def save_report(self) -> None:
+        path = f"laporan_{self.key}_{datetime.now():%Y%m%d_%H%M%S}.txt"
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(LOG) + "\n")
+        out(t("saved", path=os.path.abspath(path)))
+
+    def convergence(self, p: Problem, ns: Sequence[int], cand_ns: Sequence[int],
+                    note_key: str = "conv_note", title_suffix: str = "") -> None:
+        title(f"{t('conv_title')}{title_suffix}")
+        hdr = f"{'n':>8} {'h':>12} {'I':>14} " + (f"{'Et':>12} {'|et| %':>10}" if p.exact is not None else f"{t('conv_chg'):>10}")
+        say(hdr)
+        for n in sorted(set(cand_ns) | set(ns)):
+            est = self.compute(p, n)
+            h = (p.b - p.a) / n
+            mark = " <" if n in ns else ""
+            if p.exact is not None:
+                say(f"{n:>8} {h:>12.6g} {est:>14.6f} {p.exact - est:>12.6f} {rel_err_pct(p.exact, est):>10.4f}{mark}")
+            else:
+                finer = self.compute(p, 2 * n)
+                say(f"{n:>8} {h:>12.6g} {est:>14.6f} {rel_err_pct(finer, est):>10.4f}{mark}")
+        say(t(note_key))
+
+    def advise(self, p: Problem, tol: float, base_n: int = 1, step_size: int = 1,
+               order: int = 2, title_suffix: str = "") -> None:
+        title(f"{t('adv_title')}{title_suffix}")
+        say(t("adv_target", tol=f"{tol:g}", basis=t("basis_true") if p.exact is not None else t("basis_est")))
+        cache: Dict[int, Tuple[float, float]] = {}
+        mult = 2 ** order
+
+        def err(n: int) -> Tuple[float, float]:
+            if n not in cache:
+                est = self.compute(p, n)
+                ref = p.exact if p.exact is not None else (mult * self.compute(p, 2 * n) - est) / (mult - 1)
+                cache[n] = (rel_err_pct(ref, est), est)
+            return cache[n]
+
+        say(t("adv_n1" if base_n == 1 else "simp_adv_n_base", n=base_n, e=f"{err(base_n)[0]:.4f}"))
+        lo, hi, n, limit = 0, None, base_n, 2 ** 16
+        while n <= limit:
+            if err(n)[0] <= tol:
+                hi = n
+                break
+            lo, n = n, n * 2
+        if hi is None:
+            say(t("adv_fail", n=limit, e=f"{err(limit)[0]:.4f}"))
+        else:
+            while lo + step_size < hi:
+                mid = ((lo + hi) // (2 * step_size)) * step_size
+                if mid <= lo:
+                    mid = lo + step_size
+                if mid >= hi:
+                    break
+                lo, hi = (lo, mid) if err(mid)[0] <= tol else (mid, hi)
+            say(t("adv_ok", n=hi, e=f"{err(hi)[0]:.4f}", I=f"{err(hi)[1]:.6f}"))
+        if any(m.implemented for m in MODULES if m is not self):
+            say(t("adv_tip"))
+
+    def post_menu(self, p: Problem, ns: Sequence[int], computed: bool,
+                  min_n: int = 1, step_n: int = 1, plot_fn: Optional[Callable[[Problem, int], None]] = None) -> str:
+        while True:
+            out()
+            out(t("post_title"))
+            options = [("1", "post_save"), ("2", "post_mpl"), ("3", "post_ascii")] if computed else []
+            options += [("4", "post_again"), ("0", "post_back")]
+            for key, label in options:
+                out(f"  {key}) {t(label)}")
+            choice = ask(t("menu_choice"), "0")
+            if choice not in dict(options):
+                out(t("bad_choice"))
+            elif choice == "1":
+                self.save_report()
+            elif choice in ("2", "3"):
+                def_n = str(ns[0]) if ns else str(min_n)
+                n = ask_int("ask_plot_n", def_n, min_n, 100_000)
+                if n % step_n != 0:
+                    out(t("simp_need_even" if step_n == 2 else "simp_need_mult3"))
+                    continue
+                if choice == "2":
+                    (plot_fn or self.mpl_plot)(p, n)
+                else:
+                    out(); out(t("plot_title", n=n)); out(ascii_plot(p, n))
+            elif choice == "4":
+                return "again"
+            else:
+                return "back"
+
+    def base_mpl_plot(self, p: Problem, n: int, title_text: str, file_prefix: str,
+                      curve_xs: Sequence[float], curve_ys: Sequence[float],
+                      fill_color: str = "orange", label_text: Optional[str] = None) -> None:
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            out(t("no_mpl"))
+            return
+        _, xs, fs = self.nodes(p, n)
+        grid = [p.a + (p.b - p.a) * i / 400 for i in range(401)]
+        plt.figure(figsize=(8, 5))
+        plt.plot(grid, [p(x) for x in grid], "b-", label="f(x)")
+        plt.fill_between(curve_xs, curve_ys, alpha=0.3, color=fill_color, label=label_text or title_text)
+        if fill_color != "orange":
+            plt.plot(curve_xs, curve_ys, "g--", alpha=0.7)
+            plt.plot(xs, fs, "ro", markersize=3)
+        else:
+            plt.plot(xs, fs, "ro-", markersize=3)
+        if n <= 100:
+            plt.vlines(xs, 0, fs, colors="k", linewidth=0.6)
+        plt.title(title_text)
+        plt.grid(alpha=0.3)
+        plt.legend()
+        path = f"grafik_{file_prefix}_n{n}.png"
+        plt.savefig(path, dpi=150)
+        out(t("saved_chart", path=os.path.abspath(path)))
+        try:
+            plt.show()
+        except Exception:  # noqa: BLE001
+            pass
+
     def run(self) -> None:
-        """Interactive screen of the method (menu entry)."""
         coming_soon(self)
         ask(t("press_enter"))
 
@@ -474,15 +614,11 @@ def coming_soon(m: MethodModule) -> None:
 
     out()
     out("+" + "-" * (w - 2) + "+")
+    line(); line(t("soon_title"))
+    for part in textwrap.wrap(t(m.title_key), w - 8): line(part)
     line()
-    line(t("soon_title"))
-    for part in textwrap.wrap(t(m.title_key), w - 8):
-        line(part)
-    line()
-    for part in textwrap.wrap(t("soon_body"), w - 8):
-        line(part)
-    line()
-    line(t("soon_owner", owner=m.owner))
+    for part in textwrap.wrap(t("soon_body"), w - 8): line(part)
+    line(); line(t("soon_owner", owner=m.owner))
     filled = int(20 * m.progress / 100)
     line(f"{t('soon_progress')}: [{'#' * filled}{'-' * (20 - filled)}] {m.progress}%")
     line()
@@ -600,8 +736,7 @@ def ascii_plot(p: Problem, n: int, width: int = 64, height: int = 16) -> str:
 
     edge = [edge_at(x) for x in cols]
     lo, hi = min(0.0, min(curve), min(edge)), max(0.0, max(curve), max(edge))
-    if hi == lo:
-        hi = lo + 1.0
+    if hi == lo: hi = lo + 1.0
 
     def row(v: float) -> int:
         return max(0, min(height - 1, round((hi - v) / (hi - lo) * (height - 1))))
@@ -613,7 +748,7 @@ def ascii_plot(p: Problem, n: int, width: int = 64, height: int = 16) -> str:
         r_e = row(edge[c])
         for r in (range(r_e, z) if r_e < z else range(z + 1, r_e + 1)):
             grid[r][c] = ":"
-    if n <= 20:                                           # vertical sides of the trapezoids
+    if n <= 20:
         for i in range(n + 1):
             c = round(i / n * (width - 1))
             for r in range(min(z, row(fn[i])), max(z, row(fn[i])) + 1):
@@ -621,10 +756,10 @@ def ascii_plot(p: Problem, n: int, width: int = 64, height: int = 16) -> str:
     for c in range(width):
         grid[row(edge[c])][c] = "#"
         grid[row(curve[c])][c] = "*"
-    lines = []
-    for r in range(height):
-        label = f"{hi:>9.3f}" if r == 0 else (f"{lo:>9.3f}" if r == height - 1 else " " * 9)
-        lines.append(f"{label} |{''.join(grid[r])}")
+    lines = [f"{hi:>9.3f} |{''.join(grid[0])}"]
+    for r in range(1, height - 1):
+        lines.append(f"{' ':>9} |{''.join(grid[r])}")
+    lines.append(f"{lo:>9.3f} |{''.join(grid[-1])}")
     lines.append(" " * 10 + "+" + "-" * width)
     lines.append(" " * 11 + f"{p.a:g}".ljust(width - len(f"{p.b:g}")) + f"{p.b:g}")
     lines.append(" " * 11 + t("plot_legend"))
@@ -638,41 +773,18 @@ class TrapezoidModule(MethodModule):
     implemented = True
     progress = 100
 
-    # ---- numerics -----------------------------------------------------------
-    @staticmethod
-    def nodes(p: Problem, n: int) -> Tuple[float, List[float], List[float]]:
-        h = (p.b - p.a) / n
-        xs = [p.a + i * h for i in range(n + 1)]
-        xs[-1] = p.b
-        return h, xs, [p(x) for x in xs]
-
     def compute(self, p: Problem, n: int) -> float:
         if not 1 <= n <= MAX_N:
             raise ValueError(t("int_range", lo=1, hi=MAX_N))
         h, _, fs = self.nodes(p, n)
         return h / 2 * (fs[0] + 2 * math.fsum(fs[1:-1]) + fs[-1])
 
-    def applicable(self, p: Problem) -> Tuple[bool, str]:
-        try:
-            for i in range(41):
-                p(p.a + (p.b - p.a) * i / 40)
-        except FunctionError as exc:
-            return False, t("applic_no", x=fmt(exc.x), err=exc.msg)
-        msg = t("applic_yes")
-        if p.poly is not None:
-            msg += " " + (t("applic_linear") if p.poly.degree <= 1 else t("applic_poly", d=p.poly.degree))
-        return True, msg
-
-    # ---- report blocks ------------------------------------------------------
     def show(self, p: Problem, n: int) -> None:
         h, xs, fs = self.nodes(p, n)
         est = self.compute(p, n)
         title(t("run_single") if n == 1 else t("run_multi", n=n))
         step(t("s_h"), "h = (b - a) / n", f"h = ({fmt(p.b)} - {fmt(p.a)}) / {n} = {fmt(h)}")
-        rows = [f"x{i} = {x:.6g}   f(x{i}) = {fx:.6f}" for i, (x, fx) in enumerate(zip(xs, fs))]
-        if len(rows) > 12:
-            rows = rows[:4] + [t("more_nodes", k=len(rows) - 6)] + rows[-2:]
-        step(t("s_nodes"), *rows)
+        step(t("s_nodes"), *self.format_nodes(xs, fs))
         if n == 1:
             step(t("s_formula"), "I ~ (b - a) * [f(a) + f(b)] / 2",
                  f"I ~ {fmt(p.b - p.a)} * ({fs[0]:.6f} + {fs[-1]:.6f}) / 2", f"I ~ {est:.6f}")
@@ -681,152 +793,46 @@ class TrapezoidModule(MethodModule):
             step(t("s_formula"), "I ~ (h/2) * [ f(x0) + 2*(f(x1) + ... + f(x(n-1))) + f(xn) ]",
                  t("sum_interior", s=f"{inner:.6f}"),
                  f"I ~ ({fmt(h)}/2) * [ {fs[0]:.6f} + 2*{inner:.6f} + {fs[-1]:.6f} ]", f"I ~ {est:.6f}")
-        say()
-        say(t("s_errors"))
+        say(); say(t("s_errors"))
         rel = show_errors(p, est)
         f2 = p.avg_second_derivative()
         if f2 is not None:
             ea = -(p.b - p.a) ** 3 / (12 * n ** 2) * f2
-            say(f"    {t('lbl_f2')} = {f2:.6g}")
-            say(f"    {t('lbl_ea')} = -(b-a)^3 / (12 n^2) * f'' = {ea:.6g}")
-            say(f"    {t('ea_note')}")
+            say(f"    {t('lbl_f2')} = {f2:.6g}\n    {t('lbl_ea')} = -(b-a)^3 / (12 n^2) * f'' = {ea:.6g}\n    {t('ea_note')}")
         if rel is not None:
             r = abs(rel)
             step(t("s_interp"), t("interp_good") if r < 1 else t("interp_mid") if r < 10 else t("interp_bad"))
-        say()
-        say(f">>> {t('result')}: I ~ {est:.6f}")
+        say(); say(f">>> {t('result')}: I ~ {est:.6f}")
 
     def convergence(self, p: Problem, ns: List[int]) -> None:
-        title(t("conv_title"))
-        if p.exact is not None:
-            say(f"{'n':>8} {'h':>12} {'I':>14} {'Et':>12} {'|et| %':>10}")
-        else:
-            say(f"{'n':>8} {'h':>12} {'I':>14} {t('conv_chg'):>10}")
-        for n in sorted(set([1, 2, 4, 6, 8, 10, 20]) | set(ns)):
-            est = self.compute(p, n)
-            h = (p.b - p.a) / n
-            mark = " <" if n in ns else ""
-            if p.exact is not None:
-                say(f"{n:>8} {h:>12.6g} {est:>14.6f} {p.exact - est:>12.6f} {rel_err_pct(p.exact, est):>10.4f}{mark}")
-            else:
-                finer = self.compute(p, 2 * n)
-                say(f"{n:>8} {h:>12.6g} {est:>14.6f} {rel_err_pct(finer, est):>10.4f}{mark}")
-        say(t("conv_note"))
+        super().convergence(p, ns, [1, 2, 4, 6, 8, 10, 20], "conv_note")
 
     def advise(self, p: Problem, tol: float) -> None:
-        """Smallest n that reaches the target error (doubling, then bisection)."""
-        title(t("adv_title"))
-        say(t("adv_target", tol=f"{tol:g}", basis=t("basis_true") if p.exact is not None else t("basis_est")))
-        cache: Dict[int, Tuple[float, float]] = {}
+        super().advise(p, tol, base_n=1, step_size=1, order=2)
 
-        def err(n: int) -> Tuple[float, float]:
-            if n not in cache:
-                est = self.compute(p, n)
-                if p.exact is not None:
-                    ref = p.exact
-                else:   # Richardson: error ~ h^2, so (4*I(2n) - I(n)) / 3 is a better reference
-                    ref = (4 * self.compute(p, 2 * n) - est) / 3
-                cache[n] = (rel_err_pct(ref, est), est)
-            return cache[n]
-
-        say(t("adv_n1", e=f"{err(1)[0]:.4f}"))
-        lo, hi, n, limit = 0, None, 1, 2 ** 16
-        while n <= limit:
-            if err(n)[0] <= tol:
-                hi = n
-                break
-            lo, n = n, n * 2
-        if hi is None:
-            say(t("adv_fail", n=limit, e=f"{err(limit)[0]:.4f}"))
-        else:
-            while lo + 1 < hi:
-                mid = (lo + hi) // 2
-                lo, hi = (lo, mid) if err(mid)[0] <= tol else (mid, hi)
-            say(t("adv_ok", n=hi, e=f"{err(hi)[0]:.4f}", I=f"{err(hi)[1]:.6f}"))
-        if any(m.implemented for m in MODULES if m is not self):
-            say(t("adv_tip"))
-
-    # ---- extras -------------------------------------------------------------
     def mpl_plot(self, p: Problem, n: int) -> None:
-        try:
-            import matplotlib.pyplot as plt
-        except ImportError:
-            out(t("no_mpl"))
-            return
         _, xs, fs = self.nodes(p, n)
-        grid = [p.a + (p.b - p.a) * i / 400 for i in range(401)]
-        plt.figure(figsize=(8, 5))
-        plt.plot(grid, [p(x) for x in grid], "b-", label="f(x)")
-        plt.fill_between(xs, fs, alpha=0.3, color="orange", label=t("trap_title"))
-        if n <= 100:
-            plt.vlines(xs, 0, fs, colors="k", linewidth=0.6)
-        plt.plot(xs, fs, "ro-", markersize=3)
-        plt.title(f"{t('trap_title')}  n = {n}   I ~ {self.compute(p, n):.6f}")
-        plt.grid(alpha=0.3)
-        plt.legend()
-        path = f"grafik_trapesium_n{n}.png"
-        plt.savefig(path, dpi=150)
-        out(t("saved_chart", path=os.path.abspath(path)))
-        try:
-            plt.show()
-        except Exception:  # noqa: BLE001
-            pass
+        self.base_mpl_plot(p, n, f"{t('trap_title')}  n = {n}   I ~ {self.compute(p, n):.6f}",
+                           "trapesium", xs, fs, label_text=t("trap_title"))
 
-    @staticmethod
-    def save_report() -> None:
-        path = f"laporan_trapesium_{datetime.now():%Y%m%d_%H%M%S}.txt"
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write("\n".join(LOG) + "\n")
-        out(t("saved", path=os.path.abspath(path)))
-
-    def post_menu(self, p: Problem, ns: List[int], computed: bool) -> str:
-        while True:
-            out()
-            out(t("post_title"))
-            options = [("1", "post_save"), ("2", "post_mpl"), ("3", "post_ascii")] if computed else []
-            options += [("4", "post_again"), ("0", "post_back")]
-            for key, label in options:
-                out(f"  {key}) {t(label)}")
-            choice = ask(t("menu_choice"), "0")
-            if choice not in dict(options):
-                out(t("bad_choice"))
-            elif choice == "1":
-                self.save_report()
-            elif choice in ("2", "3"):
-                n = ask_int("ask_plot_n", str(ns[0]), 1, 100_000)
-                if choice == "2":
-                    self.mpl_plot(p, n)
-                else:
-                    out(); out(t("plot_title", n=n)); out(ascii_plot(p, n))
-            elif choice == "4":
-                return "again"
-            else:
-                return "back"
-
-    # ---- interactive screen -------------------------------------------------
     def run(self) -> None:
         while True:
             LOG.clear()
             title(t("trap_title"))
             say(t("trap_intro"))
-            p = ask_problem()
-            ns = ask_n_list("1")
-            tol = ask_tol()
+            p, ns, tol = ask_problem(), ask_n_list("1"), ask_tol()
             step(t("s_problem"), p.label, f"{t('sum_int')} = [{fmt(p.a)}, {fmt(p.b)}]",
                  f"{t('sum_n')} = {', '.join(map(str, ns))}",
-                 f"{t('sum_exact')} = {p.exact:.7f}" if p.exact is not None
-                 else f"{t('sum_exact')} = {t('sum_unknown')}", f"{t('sum_tol')} = {tol:g}%")
-            ok, msg = self.applicable(p)
+                 f"{t('sum_exact')} = {p.exact:.7f}" if p.exact is not None else f"{t('sum_exact')} = {t('sum_unknown')}",
+                 f"{t('sum_tol')} = {tol:g}%")
+            ok, msg = self.applicable(p, max_exact_deg=1)
             step(t("s_applic"), msg)
             if ok:
                 try:
-                    for n in ns:
-                        self.show(p, n)
+                    for n in ns: self.show(p, n)
                     self.convergence(p, ns)
                     self.advise(p, tol)
-                    say()
-                    say(t("plot_title", n=ns[0]))
-                    say(ascii_plot(p, ns[0]))
+                    say(); say(t("plot_title", n=ns[0])); say(ascii_plot(p, ns[0]))
                 except FunctionError as exc:
                     ok = False
                     say(t("applic_no", x=fmt(exc.x), err=exc.msg))
@@ -899,6 +905,9 @@ add_strings({
     "simp_interp_excel": ("Akurasi sangat tinggi (< 0.1%). Polinomial interpolasi sangat mendekati f(x).",
                           "Exceptional accuracy (< 0.1%). The interpolating polynomial fits f(x) extremely well.",
                           "Précision exceptionnelle (< 0,1 %). Le polynôme d'interpolation colle parfaitement à f(x)."),
+    "simp_interp_bad": ("Akurasi rendah; perbesar n untuk pendekatan kurva yang lebih rapat.",
+                        "Low accuracy; increase n for a tighter curve approximation.",
+                        "Faible précision ; augmentez n pour une meilleure approximation de la courbe."),
 })
 
 
@@ -909,21 +918,11 @@ class SimpsonModule(MethodModule):
     implemented = True
     progress = 100
 
-    # ---- numerics -----------------------------------------------------------
-    @staticmethod
-    def nodes(p: Problem, n: int) -> Tuple[float, List[float], List[float]]:
-        h = (p.b - p.a) / n
-        xs = [p.a + i * h for i in range(n + 1)]
-        xs[-1] = p.b
-        return h, xs, [p(x) for x in xs]
-
     def compute_13(self, p: Problem, n: int) -> float:
         if not (1 <= n <= MAX_N) or n % 2 != 0:
             raise ValueError(t("simp_need_even"))
         h, _, fs = self.nodes(p, n)
-        sum_odd = math.fsum(fs[1:-1:2])
-        sum_even = math.fsum(fs[2:-1:2])
-        return (h / 3) * (fs[0] + 4 * sum_odd + 2 * sum_even + fs[-1])
+        return (h / 3) * (fs[0] + 4 * math.fsum(fs[1:-1:2]) + 2 * math.fsum(fs[2:-1:2]) + fs[-1])
 
     def compute_38(self, p: Problem, n: int) -> float:
         if not (1 <= n <= MAX_N) or n % 3 != 0:
@@ -933,10 +932,11 @@ class SimpsonModule(MethodModule):
         sum_3 = math.fsum(fs[i] for i in range(3, n, 3))
         return (3 * h / 8) * (fs[0] + 3 * sum_not3 + 2 * sum_3 + fs[-1])
 
-    def compute(self, p: Problem, n: int, variant: str = "auto") -> float:
-        if variant == "1/3":
+    def compute(self, p: Problem, n: int, variant: Optional[str] = None) -> float:
+        var = variant or getattr(self, "_curr_var", "auto")
+        if var == "1/3":
             return self.compute_13(p, n)
-        if variant == "3/8":
+        if var == "3/8":
             return self.compute_38(p, n)
         if 1 <= n <= MAX_N and n % 2 == 0:
             return self.compute_13(p, n)
@@ -944,326 +944,137 @@ class SimpsonModule(MethodModule):
             return self.compute_38(p, n)
         raise ValueError(t("simp_need_valid_n"))
 
-    def applicable(self, p: Problem) -> Tuple[bool, str]:
-        try:
-            for i in range(41):
-                p(p.a + (p.b - p.a) * i / 40)
-        except FunctionError as exc:
-            return False, t("applic_no", x=fmt(exc.x), err=exc.msg)
-        msg = t("applic_yes")
-        if p.poly is not None:
-            msg += " " + (t("simp_applic_poly_exact", d=p.poly.degree)
-                          if p.poly.degree <= 3
-                          else t("simp_applic_poly_err", d=p.poly.degree))
-        return True, msg
-
-    # ---- report blocks ------------------------------------------------------
     def show(self, p: Problem, n: int, variant: str = "1/3") -> None:
         h, xs, fs = self.nodes(p, n)
         est = self.compute(p, n, variant)
+        is_13 = variant == "1/3"
+        title(t("simp_run_13_single" if n == 2 else "simp_run_13_multi", n=n) if is_13
+              else t("simp_run_38_single" if n == 3 else "simp_run_38_multi", n=n))
+        step(t("s_h"), "h = (b - a) / n", f"h = ({fmt(p.b)} - {fmt(p.a)}) / {n} = {fmt(h)}")
+        step(t("s_nodes"), *self.format_nodes(xs, fs))
 
-        if variant == "1/3":
-            title(t("simp_run_13_single") if n == 2 else t("simp_run_13_multi", n=n))
-            step(t("s_h"), "h = (b - a) / n", f"h = ({fmt(p.b)} - {fmt(p.a)}) / {n} = {fmt(h)}")
-            rows = [f"x{i} = {x:.6g}   f(x{i}) = {fx:.6f}" for i, (x, fx) in enumerate(zip(xs, fs))]
-            if len(rows) > 12:
-                rows = rows[:4] + [t("more_nodes", k=len(rows) - 6)] + rows[-2:]
-            step(t("s_nodes"), *rows)
+        if is_13:
             if n == 2:
                 step(t("s_formula"), "I ~ (h/3) * [ f(x0) + 4*f(x1) + f(x2) ]",
-                     f"I ~ ({fmt(h)}/3) * [ {fs[0]:.6f} + 4*{fs[1]:.6f} + {fs[2]:.6f} ]",
-                     f"I ~ {est:.6f}")
+                     f"I ~ ({fmt(h)}/3) * [ {fs[0]:.6f} + 4*{fs[1]:.6f} + {fs[2]:.6f} ]", f"I ~ {est:.6f}")
             else:
-                sum_odd = math.fsum(fs[1:-1:2])
-                sum_even = math.fsum(fs[2:-1:2])
-                step(t("s_formula"),
-                     "I ~ (h/3) * [ f(x0) + 4*(f(x1) + f(x3) + ...) + 2*(f(x2) + f(x4) + ...) + f(xn) ]",
-                     t("simp_sum_odd", s=f"{sum_odd:.6f}"),
-                     t("simp_sum_even", s=f"{sum_even:.6f}"),
-                     f"I ~ ({fmt(h)}/3) * [ {fs[0]:.6f} + 4*{sum_odd:.6f} + 2*{sum_even:.6f} + {fs[-1]:.6f} ]",
-                     f"I ~ {est:.6f}")
-        else:  # 3/8
-            title(t("simp_run_38_single") if n == 3 else t("simp_run_38_multi", n=n))
-            step(t("s_h"), "h = (b - a) / n", f"h = ({fmt(p.b)} - {fmt(p.a)}) / {n} = {fmt(h)}")
-            rows = [f"x{i} = {x:.6g}   f(x{i}) = {fx:.6f}" for i, (x, fx) in enumerate(zip(xs, fs))]
-            if len(rows) > 12:
-                rows = rows[:4] + [t("more_nodes", k=len(rows) - 6)] + rows[-2:]
-            step(t("s_nodes"), *rows)
+                so, se = math.fsum(fs[1:-1:2]), math.fsum(fs[2:-1:2])
+                step(t("s_formula"), "I ~ (h/3) * [ f(x0) + 4*(f(x1) + f(x3) + ...) + 2*(f(x2) + f(x4) + ...) + f(xn) ]",
+                     t("simp_sum_odd", s=f"{so:.6f}"), t("simp_sum_even", s=f"{se:.6f}"),
+                     f"I ~ ({fmt(h)}/3) * [ {fs[0]:.6f} + 4*{so:.6f} + 2*{se:.6f} + {fs[-1]:.6f} ]", f"I ~ {est:.6f}")
+        else:
             if n == 3:
                 step(t("s_formula"), "I ~ (3h/8) * [ f(x0) + 3*f(x1) + 3*f(x2) + f(x3) ]",
-                     f"I ~ (3*{fmt(h)}/8) * [ {fs[0]:.6f} + 3*{fs[1]:.6f} + 3*{fs[2]:.6f} + {fs[3]:.6f} ]",
-                     f"I ~ {est:.6f}")
+                     f"I ~ (3*{fmt(h)}/8) * [ {fs[0]:.6f} + 3*{fs[1]:.6f} + 3*{fs[2]:.6f} + {fs[3]:.6f} ]", f"I ~ {est:.6f}")
             else:
-                sum_not3 = math.fsum(fs[i] for i in range(1, n) if i % 3 != 0)
-                sum_3 = math.fsum(fs[i] for i in range(3, n, 3))
-                step(t("s_formula"),
-                     "I ~ (3h/8) * [ f(x0) + 3*(f1 + f2 + f4 + ...) + 2*(f3 + f6 + ...) + f(xn) ]",
-                     t("simp_sum_not3", s=f"{sum_not3:.6f}"),
-                     t("simp_sum_3", s=f"{sum_3:.6f}"),
-                     f"I ~ (3*{fmt(h)}/8) * [ {fs[0]:.6f} + 3*{sum_not3:.6f} + 2*{sum_3:.6f} + {fs[-1]:.6f} ]",
-                     f"I ~ {est:.6f}")
+                s_not3 = math.fsum(fs[i] for i in range(1, n) if i % 3 != 0)
+                s_3 = math.fsum(fs[i] for i in range(3, n, 3))
+                step(t("s_formula"), "I ~ (3h/8) * [ f(x0) + 3*(f1 + f2 + f4 + ...) + 2*(f3 + f6 + ...) + f(xn) ]",
+                     t("simp_sum_not3", s=f"{s_not3:.6f}"), t("simp_sum_3", s=f"{s_3:.6f}"),
+                     f"I ~ (3*{fmt(h)}/8) * [ {fs[0]:.6f} + 3*{s_not3:.6f} + 2*{s_3:.6f} + {fs[-1]:.6f} ]", f"I ~ {est:.6f}")
 
-        say()
-        say(t("s_errors"))
+        say(); say(t("s_errors"))
         rel = show_errors(p, est)
         f4 = p.avg_fourth_derivative()
         if f4 is not None:
-            if variant == "1/3":
+            if is_13:
                 ea = -(p.b - p.a) ** 5 / (180 * (n ** 4)) * f4
                 formula = "-(b-a)^5 / 2880 * f^(4)" if n == 2 else "-(b-a)^5 / (180 n^4) * f^(4)"
             else:
                 ea = -(p.b - p.a) ** 5 / (80 * (n ** 4)) * f4
                 formula = "-(b-a)^5 / 6480 * f^(4)" if n == 3 else "-(b-a)^5 / (80 n^4) * f^(4)"
-            say(f"    {t('lbl_f4')} = {f4:.6g}")
-            say(f"    {t('lbl_ea')} = {formula} = {ea:.6g}")
-            say(f"    {t('simp_ea_note')}")
+            say(f"    {t('lbl_f4')} = {f4:.6g}\n    {t('lbl_ea')} = {formula} = {ea:.6g}\n    {t('simp_ea_note')}")
 
         if rel is not None:
             r = abs(rel)
-            if r < 0.1:
-                step(t("s_interp"), t("simp_interp_excel"))
-            elif r < 1.0:
-                step(t("s_interp"), t("interp_good"))
-            elif r < 5.0:
-                step(t("s_interp"), t("interp_mid"))
-            else:
-                step(t("s_interp"), t("simp_interp_bad"))
-        say()
-        say(f">>> {t('result')}: I ~ {est:.6f}")
+            step(t("s_interp"), t("simp_interp_excel") if r < 0.1 else t("interp_good") if r < 1.0 else t("interp_mid") if r < 5.0 else t("simp_interp_bad"))
+        say(); say(f">>> {t('result')}: I ~ {est:.6f}")
 
     def convergence(self, p: Problem, ns: List[int], variant: str = "1/3") -> None:
-        title(f"{t('conv_title')} - Simpson {variant}")
-        if p.exact is not None:
-            say(f"{'n':>8} {'h':>12} {'I':>14} {'Et':>12} {'|et| %':>10}")
-        else:
-            say(f"{'n':>8} {'h':>12} {'I':>14} {t('conv_chg'):>10}")
-
-        if variant == "1/3":
-            cand_ns = sorted(set([2, 4, 6, 8, 10, 16, 20]) | {n for n in ns if n % 2 == 0})
-        else:
-            cand_ns = sorted(set([3, 6, 9, 12, 18, 24]) | {n for n in ns if n % 3 == 0})
-
-        for n in cand_ns:
-            est = self.compute(p, n, variant)
-            h = (p.b - p.a) / n
-            mark = " <" if n in ns else ""
-            if p.exact is not None:
-                say(f"{n:>8} {h:>12.6g} {est:>14.6f} {p.exact - est:>12.6f} {rel_err_pct(p.exact, est):>10.4f}{mark}")
-            else:
-                finer = self.compute(p, 2 * n, variant)
-                say(f"{n:>8} {h:>12.6g} {est:>14.6f} {rel_err_pct(finer, est):>10.4f}{mark}")
-        say(t("simp_conv_note"))
+        cand = [2, 4, 6, 8, 10, 16, 20] if variant == "1/3" else [3, 6, 9, 12, 18, 24]
+        valid_ns = [n for n in ns if (n % 2 == 0 if variant == "1/3" else n % 3 == 0)]
+        self._curr_var = variant
+        try:
+            super().convergence(p, valid_ns, cand, "simp_conv_note", f" - Simpson {variant}")
+        finally:
+            self._curr_var = None
 
     def advise(self, p: Problem, tol: float, variant: str = "1/3") -> None:
-        """Smallest valid n that reaches the target error (doubling, then bisection)."""
-        title(f"{t('adv_title')} - Simpson {variant}")
-        say(t("adv_target", tol=f"{tol:g}", basis=t("basis_true") if p.exact is not None else t("basis_est")))
-        cache: Dict[int, Tuple[float, float]] = {}
+        self._curr_var = variant
+        step_sz = 2 if variant == "1/3" else 3
+        try:
+            super().advise(p, tol, base_n=step_sz, step_size=step_sz, order=4, title_suffix=f" - Simpson {variant}")
+        finally:
+            self._curr_var = None
 
-        def err(n: int) -> Tuple[float, float]:
-            if n not in cache:
-                est = self.compute(p, n, variant)
-                if p.exact is not None:
-                    ref = p.exact
-                else:  # Richardson extrapolation for O(h^4)
-                    ref = (16 * self.compute(p, 2 * n, variant) - est) / 15
-                cache[n] = (rel_err_pct(ref, est), est)
-            return cache[n]
-
-        base_n = 2 if variant == "1/3" else 3
-        say(t("simp_adv_n_base", n=base_n, e=f"{err(base_n)[0]:.4f}"))
-        lo, hi, n, limit = 0, None, base_n, 2 ** 16
-        while n <= limit:
-            if err(n)[0] <= tol:
-                hi = n
-                break
-            lo, n = n, n * 2
-        if hi is None:
-            say(t("adv_fail", n=limit, e=f"{err(limit)[0]:.4f}"))
-        else:
-            step_size = 2 if variant == "1/3" else 3
-            while lo + step_size < hi:
-                mid = ((lo + hi) // (2 * step_size)) * step_size
-                if mid <= lo:
-                    mid = lo + step_size
-                if mid >= hi:
-                    break
-                lo, hi = (lo, mid) if err(mid)[0] <= tol else (mid, hi)
-            say(t("adv_ok", n=hi, e=f"{err(hi)[0]:.4f}", I=f"{err(hi)[1]:.6f}"))
-        if any(m.implemented for m in MODULES if m is not self):
-            say(t("adv_tip"))
-
-    # ---- extras -------------------------------------------------------------
     def mpl_plot(self, p: Problem, n: int, variant: str = "1/3") -> None:
-        try:
-            import matplotlib.pyplot as plt
-        except ImportError:
-            out(t("no_mpl"))
-            return
         _, xs, fs = self.nodes(p, n)
-        grid = [p.a + (p.b - p.a) * i / 400 for i in range(401)]
-        plt.figure(figsize=(8, 5))
-        plt.plot(grid, [p(x) for x in grid], "b-", label="f(x)")
-
-        curve_xs: List[float] = []
-        curve_ys: List[float] = []
-        if variant == "1/3":
-            for k in range(0, n, 2):
-                x0, x1, x2 = xs[k], xs[k + 1], xs[k + 2]
-                y0, y1, y2 = fs[k], fs[k + 1], fs[k + 2]
-                h_k = x1 - x0
-                sub_grid = [x0 + (x2 - x0) * j / 40 for j in range(41)]
-                for x in sub_grid:
-                    l0 = (x - x1) * (x - x2) / (2 * h_k * h_k)
-                    l1 = -(x - x0) * (x - x2) / (h_k * h_k)
-                    l2 = (x - x0) * (x - x1) / (2 * h_k * h_k)
-                    curve_xs.append(x)
-                    curve_ys.append(y0 * l0 + y1 * l1 + y2 * l2)
-        elif variant == "3/8":
-            for k in range(0, n, 3):
-                x0, x1, x2, x3 = xs[k], xs[k + 1], xs[k + 2], xs[k + 3]
-                y0, y1, y2, y3 = fs[k], fs[k + 1], fs[k + 2], fs[k + 3]
-                h_k = x1 - x0
-                sub_grid = [x0 + (x3 - x0) * j / 40 for j in range(41)]
-                for x in sub_grid:
-                    l0 = (x - x1) * (x - x2) * (x - x3) / (-6 * (h_k ** 3))
-                    l1 = (x - x0) * (x - x2) * (x - x3) / (2 * (h_k ** 3))
-                    l2 = (x - x0) * (x - x1) * (x - x3) / (-2 * (h_k ** 3))
-                    l3 = (x - x0) * (x - x1) * (x - x2) / (6 * (h_k ** 3))
-                    curve_xs.append(x)
-                    curve_ys.append(y0 * l0 + y1 * l1 + y2 * l2 + y3 * l3)
-        else:
-            curve_xs, curve_ys = xs, fs
-
-        lbl = f"Simpson {variant}"
-        plt.fill_between(curve_xs, curve_ys, alpha=0.3, color="teal", label=lbl)
-        plt.plot(curve_xs, curve_ys, "g--", alpha=0.7)
-        if n <= 100:
-            plt.vlines(xs, 0, fs, colors="k", linewidth=0.6)
-        plt.plot(xs, fs, "ro", markersize=3)
-        est = self.compute(p, n, variant)
-        plt.title(f"Aturan Simpson ({variant})  n = {n}   I ~ {est:.6f}")
-        plt.grid(alpha=0.3)
-        plt.legend()
-        path = f"grafik_simpson_{variant.replace('/', '_')}_n{n}.png"
-        plt.savefig(path, dpi=150)
-        out(t("saved_chart", path=os.path.abspath(path)))
-        try:
-            plt.show()
-        except Exception:  # noqa: BLE001
-            pass
-
-    @staticmethod
-    def save_report() -> None:
-        path = f"laporan_simpson_{datetime.now():%Y%m%d_%H%M%S}.txt"
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write("\n".join(LOG) + "\n")
-        out(t("saved", path=os.path.abspath(path)))
-
-    def post_menu(self, p: Problem, ns: List[int], computed: bool, variant: str = "1/3") -> str:
-        while True:
-            out()
-            out(t("post_title"))
-            options = [("1", "post_save"), ("2", "post_mpl"), ("3", "post_ascii")] if computed else []
-            options += [("4", "post_again"), ("0", "post_back")]
-            for key, label in options:
-                out(f"  {key}) {t(label)}")
-            choice = ask(t("menu_choice"), "0")
-            if choice not in dict(options):
-                out(t("bad_choice"))
-            elif choice == "1":
-                self.save_report()
-            elif choice in ("2", "3"):
-                default_n = ns[0] if ns else (2 if variant == "1/3" else 3)
-                lo = 2 if variant == "1/3" else 3
-                n = ask_int("ask_plot_n", str(default_n), lo, 100_000)
-                if variant == "1/3" and n % 2 != 0:
-                    out(t("simp_need_even"))
-                    continue
-                if variant == "3/8" and n % 3 != 0:
-                    out(t("simp_need_mult3"))
-                    continue
-                if choice == "2":
-                    self.mpl_plot(p, n, variant)
+        c_xs, c_ys, step_k = [], [], 2 if variant == "1/3" else 3
+        for k in range(0, n, step_k):
+            sub_xs, sub_ys = xs[k:k + step_k + 1], fs[k:k + step_k + 1]
+            hk = sub_xs[1] - sub_xs[0]
+            grid = [sub_xs[0] + (sub_xs[-1] - sub_xs[0]) * j / 40 for j in range(41)]
+            for x in grid:
+                c_xs.append(x)
+                if variant == "1/3":
+                    l0 = (x - sub_xs[1]) * (x - sub_xs[2]) / (2 * hk * hk)
+                    l1 = -(x - sub_xs[0]) * (x - sub_xs[2]) / (hk * hk)
+                    l2 = (x - sub_xs[0]) * (x - sub_xs[1]) / (2 * hk * hk)
+                    c_ys.append(sub_ys[0] * l0 + sub_ys[1] * l1 + sub_ys[2] * l2)
                 else:
-                    out(); out(t("plot_title", n=n)); out(ascii_plot(p, n))
-            elif choice == "4":
-                return "again"
-            else:
-                return "back"
+                    l0 = (x - sub_xs[1]) * (x - sub_xs[2]) * (x - sub_xs[3]) / (-6 * hk**3)
+                    l1 = (x - sub_xs[0]) * (x - sub_xs[2]) * (x - sub_xs[3]) / (2 * hk**3)
+                    l2 = (x - sub_xs[0]) * (x - sub_xs[1]) * (x - sub_xs[3]) / (-2 * hk**3)
+                    l3 = (x - sub_xs[0]) * (x - sub_xs[1]) * (x - sub_xs[2]) / (6 * hk**3)
+                    c_ys.append(sub_ys[0] * l0 + sub_ys[1] * l1 + sub_ys[2] * l2 + sub_ys[3] * l3)
+        est = self.compute(p, n, variant)
+        self.base_mpl_plot(p, n, f"Aturan Simpson ({variant})  n = {n}   I ~ {est:.6f}",
+                           f"simpson_{variant.replace('/', '_')}", c_xs, c_ys,
+                           fill_color="teal", label_text=f"Simpson {variant}")
 
-    # ---- interactive screen -------------------------------------------------
     def run(self) -> None:
         while True:
             LOG.clear()
             title(t("simp_title"))
             say(t("simp_intro"))
-
             out()
             out(t("simp_choice"))
-            out(f"  1) {t('simp_opt_13')}")
-            out(f"  2) {t('simp_opt_38')}")
-            out(f"  3) {t('simp_opt_both')}")
+            for i, opt in enumerate(["simp_opt_13", "simp_opt_38", "simp_opt_both"], 1):
+                out(f"  {i}) {t(opt)}")
             while True:
                 c = ask(t("menu_choice"), "1")
-                if c in ("1", "2", "3"):
-                    break
+                if c in ("1", "2", "3"): break
                 out(t("bad_choice"))
             variant = "1/3" if c == "1" else ("3/8" if c == "2" else "both")
-
             p = ask_problem()
-
-            def_n = "2" if variant == "1/3" else ("3" if variant == "3/8" else "6")
+            step_sz = 2 if variant == "1/3" else (3 if variant == "3/8" else 6)
+            err_key = "simp_need_even" if variant == "1/3" else ("simp_need_mult3" if variant == "3/8" else "simp_need_mult6")
             while True:
-                ns = ask_n_list(def_n)
-                if variant == "1/3":
-                    invalid = [n for n in ns if n < 2 or n % 2 != 0]
-                    if invalid:
-                        out(t("simp_need_even"))
-                        continue
-                elif variant == "3/8":
-                    invalid = [n for n in ns if n < 3 or n % 3 != 0]
-                    if invalid:
-                        out(t("simp_need_mult3"))
-                        continue
-                else:  # both
-                    invalid = [n for n in ns if n < 6 or n % 6 != 0]
-                    if invalid:
-                        out(t("simp_need_mult6"))
-                        continue
+                ns = ask_n_list(str(step_sz))
+                if any(n < step_sz or n % step_sz != 0 for n in ns):
+                    out(t(err_key))
+                    continue
                 break
-
             tol = ask_tol()
             step(t("s_problem"), p.label, f"{t('sum_int')} = [{fmt(p.a)}, {fmt(p.b)}]",
                  f"{t('sum_n')} = {', '.join(map(str, ns))}",
-                 f"{t('sum_exact')} = {p.exact:.7f}" if p.exact is not None
-                 else f"{t('sum_exact')} = {t('sum_unknown')}", f"{t('sum_tol')} = {tol:g}%")
-
-            ok, msg = self.applicable(p)
+                 f"{t('sum_exact')} = {p.exact:.7f}" if p.exact is not None else f"{t('sum_exact')} = {t('sum_unknown')}",
+                 f"{t('sum_tol')} = {tol:g}%")
+            ok, msg = self.applicable(p, max_exact_deg=3)
             step(t("s_applic"), msg)
             if ok:
                 try:
-                    if variant in ("1/3", "3/8"):
-                        for n in ns:
-                            self.show(p, n, variant)
-                        self.convergence(p, ns, variant)
-                        self.advise(p, tol, variant)
-                    else:  # both
-                        for n in ns:
-                            self.show(p, n, "1/3")
-                            self.show(p, n, "3/8")
-                        self.convergence(p, ns, "1/3")
-                        self.convergence(p, ns, "3/8")
-                        self.advise(p, tol, "1/3")
-                    say()
-                    say(t("plot_title", n=ns[0]))
-                    say(ascii_plot(p, ns[0]))
+                    vars_to_run = ["1/3", "3/8"] if variant == "both" else [variant]
+                    for var in vars_to_run:
+                        for n in ns: self.show(p, n, var)
+                        self.convergence(p, ns, var)
+                    self.advise(p, tol, vars_to_run[0])
+                    say(); say(t("plot_title", n=ns[0])); say(ascii_plot(p, ns[0]))
                 except FunctionError as exc:
                     ok = False
                     say(t("applic_no", x=fmt(exc.x), err=exc.msg))
-
-            post_var = "1/3" if variant != "3/8" else "3/8"
-            if self.post_menu(p, ns, ok, post_var) == "back":
+            post_var = "3/8" if variant == "3/8" else "1/3"
+            if self.post_menu(p, ns, ok, min_n=step_sz, step_n=step_sz, plot_fn=lambda prob, n: self.mpl_plot(prob, n, post_var)) == "back":
                 return
 
 
