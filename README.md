@@ -1,106 +1,88 @@
-# Trapezoid Rule Integration (Criterion 1)
+# Kalkulator Integrasi Numerik / Numerical Integration Calculator
 
-A single-file Python program (`main.py`) that integrates a function with the
-**trapezoid rule**, shows every step of the solution, and tells you whether the
-method works for the function and how many segments it needs.
+Group project for *Metoda Numerik* (Newton-Cotes formulas, Chapter 21).
+One file (`main.py`), no dependencies, three team sections.
 
-It reproduces *Aturan Trapesium - Contoh 21.1* from the lecture slides:
-
-    f(x) = 0.2 + 25x - 200x^2 + 675x^3 - 900x^4 + 400x^5,   a = 0,  b = 0.8
-    analytic integral = 1.640533
-
-## Requirements
-
-- Python 3.8 or newer
-- No extra packages (standard library only)
-
-## Quick start
-
-Put `main.py` anywhere and run it from that folder:
-
-    python main.py                # slide example, single segment (n = 1)
-    python main.py --n 1 10       # single segment, then 10 segments
-    python main.py --b 1.2 --n 10 # change the upper limit to 1.2
-
-## Options
-
-| Option | Meaning | Default |
-|---|---|---|
-| `--a`, `--b` | lower / upper integration limit | `0`, `0.8` |
-| `--n` | one or more segment counts to solve step by step | `1` |
-| `--coeffs` | polynomial coefficients, ascending powers (`c0 c1 c2 ...`) | the slide function |
-| `--expr` | any expression in `x`, e.g. `"exp(-x**2)"` (uses Python `math` names) | - |
-| `--exact` | analytic value of the integral (computed automatically for polynomials) | - |
-| `--tol` | target relative error (%) for the advisor | `1` |
-| `--max-n` | largest segment count the advisor will try | `1024` |
-
-Examples:
-
-    python main.py --coeffs 1 2 3 --a 0 --b 2
-    python main.py --expr "sin(x) + x**2" --a 0 --b 3 --n 6 --tol 0.1
-    python main.py --expr "1/x" --a 1 --b 2 --exact 0.693147
-
-## What the program prints
-
-For each `n` you ask for, it prints:
-
-1. The problem (function, interval, `n`)
-2. Whether the trapezoid rule is applicable
-3. The step size `h = (b - a) / n`
-4. The nodes `x_i` and values `f(x_i)`
-5. The formula with the numbers substituted in
-6. The true error `Et` and relative true error (if the analytic value is known)
-7. A short interpretation of the accuracy
-
-Then the **advisor** section doubles `n` (1, 2, 4, 8, ...) until the relative
-error is at or below `--tol`, and reports the smallest `n` that works.
-
-- If the analytic value is known, the error is the **true** relative error.
-- If it is not known, the error is **estimated** by comparing the result with the
-  one obtained using twice as many segments.
-
-## Expected result for the slide example
-
-| n | Estimate | True error Et | Relative true error |
+| Section | Method | Status | Owner |
 |---|---|---|---|
-| 1 | 0.172800 | 1.467733 | 89.47% |
-| 10 | 1.615043 | 0.025491 | 1.55% |
+| 2 | **Aturan Trapesium** (single + composite) | ✅ done | you |
+| 3 | **Aturan Simpson** (1/3 and 3/8) | 🚧 coming soon | Teammate A |
+| 4 | **Metode Gabungan** (Simpson 1/3 + 3/8) | 🚧 coming soon | Teammate B |
 
-With the default 1% target, the advisor reports that the trapezoid rule needs
-**n = 16** segments (error about 0.61%).
+Languages: **Bahasa Indonesia** (default), **English**, **Français** — pick at startup or from the main menu.
 
-Note: the program uses the full-precision analytic value (1.6405333...) instead
-of the rounded 1.640533 printed on the slide; the errors agree to the digits shown.
+## Cara cepat (Indonesia)
 
-## Why a single segment fails here
+```
+python main.py            # pilih bahasa di awal
+python main.py --lang id  # langsung Bahasa Indonesia (en / fr juga bisa)
+```
+Butuh Python 3.8+. Tidak perlu install apa pun. (Opsional: `pip install matplotlib` untuk grafik gambar.)
+Tekan **Enter** untuk memakai nilai bawaan `[di dalam kurung]`. Desimal boleh pakai koma (`0,8`) atau titik, dan angka boleh berupa `pi/2`.
 
-`f` is a degree-5 polynomial. The trapezoid rule replaces the curve with a
-straight line per segment, so it is exact only for polynomials of degree 1 or
-less. Over [0, 0.8] the curve rises and falls sharply, so one segment is a poor
-approximation. More segments make each straight piece fit the curve better.
+## Quick start (English)
 
-## Code layout inside `main.py`
+```
+python main.py            # choose the language first
+python main.py --lang en  # skip the language prompt
+```
+Python 3.8+, standard library only. Optional: `pip install matplotlib` for the image chart.
+Press **Enter** to accept the default shown in `[brackets]`. Decimals can use a comma (`0,8`) or a dot, and numbers can be expressions like `pi/2`.
 
-1. Core data structures (`Polynomial`, `Problem`, `Step`, `Result`)
-2. `Method` base class and `@register` registry
-3. `Trapezoid` method (single and composite)
-4. Advisor (`advise`)
-5. Report printing
-6. Command-line interface
+## What the Trapezoid section does
 
-## Adding Simpson or the combined method later
+1. **Choose a function**: the slide example (21.1), a polynomial (type coefficients), or any expression such as `exp(-x^2)` or `25x - 200x^2` (`2x`, `x^2`, `sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, `pi`, `e` are understood).
+2. **Enter** `a`, `b`, one or more segment counts `n` (e.g. `1, 10, 20`), and a target error.
+3. The program prints, for every `n`:
+   - applicability check (is `f` finite on `[a, b]`?)
+   - step size `h`, the nodes `f(xi)`, the formula with numbers substituted
+   - **true error** `Et`, **relative true error** `et`, the slide's **estimated error** `Ea = -(b-a)^3 / (12 n^2) * f''` with the average second derivative, and an interpretation
+4. A **convergence table** (n = 1, 2, 4, 6, 8, 10, 20 + your values).
+5. An **advisor**: the smallest `n` that reaches your target error. If you don't know the exact integral it uses Richardson extrapolation (n vs 2n) to estimate the error.
+6. A **text plot** (curve, trapezoid edge, counted area). Afterwards you can save a `.txt` report, show a matplotlib chart (saved as PNG), plot another `n`, or start over.
 
-Write another class in section 3 of `main.py`, subclass `Method`, implement
-`check`, `estimate` and `solve`, and decorate it with `@register`. The advisor
-then evaluates it automatically alongside the trapezoid rule, so the program can
-tell you which method is best. Simpson 1/3 should override `n_ladder` so that it
-only tries even `n`. A commented template is included in the file.
+Slide check (Contoh 21.1, `n = 1`): `I ≈ 0.1728`, `Et = 1.467733`, `et = 89.5%`, `f'' = -60`, `Ea = 2.56` — all reproduced by the program.
+
+Menu option **Bandingkan semua metode / Compare all methods** puts every *finished* method side by side for the same function and `n`. Unfinished methods show *coming soon*.
+
+## Teammate guide (Sections 3 and 4)
+
+Only edit **your own section**; Git merges stay painless. Everything you need is in the shared toolkit (Section 1):
+
+| Helper | What it does |
+|---|---|
+| `ask_problem()` | asks for the function, `a`, `b` (+ exact value) → returns a `Problem` `p`; call `p(x)` to evaluate `f` safely |
+| `ask_n_list("2")` | asks for one or more `n` → list of ints |
+| `ask_tol()` | asks for the target error (%) |
+| `title()`, `step(head, *lines)`, `say(text)` | print **and** record for the saved report (use `out()` for prompts/menus only) |
+| `show_errors(p, estimate)` | prints exact value, `Et`, relative error; returns the relative error |
+| `rel_err_pct(exact, est)` | relative error in % |
+| `t("key")` | translated text for the current language |
+| `p.exact`, `p.poly`, `p.avg_second_derivative()` | exact value (or `None`), polynomial (or `None`), mean of `f''` |
+
+### The 3-step contract
+
+1. **Texts**: put your strings in your section with
+   ```python
+   add_strings({"simp_need_even": ("n harus genap untuk Simpson 1/3.",
+                                   "n must be even for Simpson 1/3.",
+                                   "n doit être pair pour Simpson 1/3.")})
+   ```
+   Order is always *(Indonesia, English, Français)*. Don't put `{}` in a text unless it is a `{placeholder}`.
+2. **Math**: implement `compute(self, p, n) -> float` returning the estimate. If `n` is not allowed, `raise ValueError(t("simp_need_even"))`. This is all the *Compare* menu needs.
+3. **Screen**: implement `run(self)` (the interactive part, same style as `TrapezoidModule.run`), set your name in `owner`, set `implemented = True` and `progress = 100`.
+
+Until `implemented = True`, your menu entry shows the **coming soon** screen with your name and progress bar, so the demo never breaks. A crash inside any module is caught and shown as a message; it does not close the program.
+
+### Rules from the slides (to implement)
+
+- **Simpson 1/3**: `I ≈ (b-a)/(3n) [f0 + 4(f1+f3+...) + 2(f2+f4+...) + fn]`, **n even**.
+- **Simpson 3/8**: `I ≈ (3h/8) [f0 + 3f1 + 3f2 + f3]`, `n` a **multiple of 3**.
+- **Combined** (slide 47): `n` even → Simpson 1/3 on all pairs; `n` odd and `n > 1` → Simpson 3/8 on the **last 3 segments**, Simpson 1/3 on the rest; `n = 1` → trapezoid.
+- Check: with the slide function on `[0, 0.8]`: Simpson 1/3 `n=4` → `1.623467` (1.04%), 3/8 `n=3` → `1.519170` (7.4%), combined `n=5` → `1.645077` (-0.28%).
 
 ## Notes
 
-- `--expr` evaluates the text you type with Python's `eval` (restricted to `math`
-  functions). Use it only with your own input.
-- Output is plain ASCII, so it works in any terminal.
-- Reading of the lecturer's handwriting on the slide: "a. batas 1,2?" is treated
-  as changing the upper limit to 1.2 (`--b 1.2`), and "b. n segmen" as using
-  multiple segments (`--n 10`).
+- Expressions are parsed with Python's `ast` and a whitelist (numbers, `+ - * / ^ %`, `x`, and `math` functions), so arbitrary code cannot run.
+- If a team prefers one file per person, move a section into its own file and `import` it. The contract above does not change.
+- Reports are saved next to where you run the program (`laporan_trapesium_<date>.txt`, `grafik_trapesium_n<N>.png`).
