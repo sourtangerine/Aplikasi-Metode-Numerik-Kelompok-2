@@ -5,9 +5,9 @@ One file (`main.py`), no dependencies, three team sections.
 
 | Section | Method | Status | Owner |
 |---|---|---|---|
-| 2 | **Aturan Trapesium** (single + composite) | ✅ done | you |
-| 3 | **Aturan Simpson** (1/3 and 3/8) | 🚧 coming soon | Teammate A |
-| 4 | **Metode Gabungan** (Simpson 1/3 + 3/8) | 🚧 coming soon | Teammate B |
+| 2 | **Aturan Trapesium** (single + composite) | ✅ done | Bimo |
+| 3 | **Aturan Simpson** (1/3 and 3/8) | 🚧 coming soon | Ihsan |
+| 4 | **Metode Gabungan** (Simpson 1/3 + 3/8) | 🚧 coming soon | Kevin |
 
 Languages: **Bahasa Indonesia** (default), **English**, **Français** — pick at startup or from the main menu.
 
