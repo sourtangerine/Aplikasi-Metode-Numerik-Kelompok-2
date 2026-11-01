@@ -473,7 +473,7 @@ def coming_soon(m: MethodModule) -> None:
 
 
 # ============================================================================
-# SECTION 2 - TRAPESIUM / TRAPEZOID   (DONE)          owner: <nama kamu>
+# SECTION 2 - TRAPESIUM / TRAPEZOID   (DONE)          owner: Bimo
 # ============================================================================
 add_strings({
     "trap_title": ("ATURAN TRAPESIUM", "TRAPEZOIDAL RULE", "MÉTHODE DES TRAPÈZES"),
@@ -818,10 +818,10 @@ class TrapezoidModule(MethodModule):
 
 
 # ============================================================================
-# SECTION 3 - SIMPSON 1/3 + 3/8                       TEAMMATE A  (belum dikerjakan)
+# SECTION 3 - SIMPSON 1/3 + 3/8                       Ihsan  (belum dikerjakan)
 # ============================================================================
 add_strings({
-    # TEAMMATE A: add your own texts here, e.g.
+    # Ihsan: add your own texts here, e.g.
     # "simp_need_even": ("n harus genap untuk Simpson 1/3.", "n must be even for Simpson 1/3.",
     #                    "n doit être pair pour Simpson 1/3."),
 })
@@ -830,7 +830,7 @@ add_strings({
 class SimpsonModule(MethodModule):
     key = "simpson"
     title_key = "menu_simp"
-    owner = "Anggota Tim A"     # <- TEAMMATE A: write your name
+    owner = "Ihsan"     # <- Ihsan: write your name
     implemented = False         # <- set to True when compute() and run() are ready
     progress = 0                # <- 0..100, shown on the coming-soon screen
 
@@ -851,17 +851,17 @@ class SimpsonModule(MethodModule):
 
 
 # ============================================================================
-# SECTION 4 - GABUNGAN / COMBINED  (Simpson 1/3 + 3/8)  TEAMMATE B  (belum dikerjakan)
+# SECTION 4 - GABUNGAN / COMBINED  (Simpson 1/3 + 3/8)  Kevin
 # ============================================================================
 add_strings({
-    # TEAMMATE B: add your own texts here (same format as above).
+    # Kevin: add your own texts here (same format as above).
 })
 
 
 class CombinedModule(MethodModule):
     key = "combined"
     title_key = "menu_comb"
-    owner = "Anggota Tim B"     # <- TEAMMATE B: write your name
+    owner = "Kevin"     # <- Kevin: write your name
     implemented = False         # <- set to True when ready
     progress = 0
 
