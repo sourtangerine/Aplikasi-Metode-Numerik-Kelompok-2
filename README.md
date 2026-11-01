@@ -7,15 +7,15 @@ One file (`main.py`), no dependencies, three team sections.
 |---|---|---|---|
 | 2 | **Aturan Trapesium** (single + composite) | ✅ done | Bimo |
 | 3 | **Aturan Simpson** (1/3 and 3/8) | ✅ done | Ihsan |
-| 4 | **Metode Gabungan** (Simpson 1/3 + 3/8) | 🚧 coming soon | Kevin |
+| 4 | **Metode Gabungan** (Simpson 1/3 + Trapesium) | ✅ done | Kevin |
 
-Languages: **Bahasa Indonesia** (default), **English**, **Français** — pick at startup or from the main menu.
+Languages: **Bahasa Indonesia** (default) and **English** — pick at startup or from the main menu.
 
 ## Cara cepat (Indonesia)
 
 ```
 python main.py            # pilih bahasa di awal
-python main.py --lang id  # langsung Bahasa Indonesia (en / fr juga bisa)
+python main.py --lang id  # langsung Bahasa Indonesia (atau --lang en)
 ```
 Butuh Python 3.8+. Tidak perlu install apa pun. (Opsional: `pip install matplotlib` untuk grafik gambar.)
 Tekan **Enter** untuk memakai nilai bawaan `[di dalam kurung]`. Desimal boleh pakai koma (`0,8`) atau titik, dan angka boleh berupa `pi/2`.
@@ -68,21 +68,21 @@ Only edit **your own section**; Git merges stay painless. Everything you need is
                                    "n must be even for Simpson 1/3.",
                                    "n doit être pair pour Simpson 1/3.")})
    ```
-   Order is always *(Indonesia, English, Français)*. Don't put `{}` in a text unless it is a `{placeholder}`.
+   Keep the existing three-value text format; Indonesian and English are the selectable languages. Don't put `{}` in a text unless it is a `{placeholder}`.
 2. **Math**: implement `compute(self, p, n) -> float` returning the estimate. If `n` is not allowed, `raise ValueError(t("simp_need_even"))`. This is all the *Compare* menu needs.
 3. **Screen**: implement `run(self)` (the interactive part, same style as `TrapezoidModule.run`), set your name in `owner`, set `implemented = True` and `progress = 100`.
 
 Until `implemented = True`, your menu entry shows the **coming soon** screen with your name and progress bar, so the demo never breaks. A crash inside any module is caught and shown as a message; it does not close the program.
 
-### Rules from the slides (to implement)
+### Method rules
 
 - **Simpson 1/3**: `I ≈ (b-a)/(3n) [f0 + 4(f1+f3+...) + 2(f2+f4+...) + fn]`, **n even**.
 - **Simpson 3/8**: `I ≈ (3h/8) [f0 + 3f1 + 3f2 + f3]`, `n` a **multiple of 3**.
-- **Combined** (slide 47): `n` even → Simpson 1/3 on all pairs; `n` odd and `n > 1` → Simpson 3/8 on the **last 3 segments**, Simpson 1/3 on the rest; `n = 1` → trapezoid.
-- Check: with the slide function on `[0, 0.8]`: Simpson 1/3 `n=4` → `1.623467` (1.04%), 3/8 `n=3` → `1.519170` (7.4%), combined `n=5` → `1.645077` (-0.28%).
+- **Combined**: `n` even → Simpson 1/3 on all segments; `n` odd and `n > 1` → Simpson 1/3 on the first `n-1` segments and trapezoid on the last segment; `n = 1` → trapezoid.
+- Check: with the slide function on `[0, 0.8]`: Simpson 1/3 `n=4` → `1.623467` (1.04%), 3/8 `n=3` → `1.519170` (7.4%), combined `n=5` → `1.595805` (2.73%).
 
 ## Notes
 
 - Expressions are parsed with Python's `ast` and a whitelist (numbers, `+ - * / ^ %`, `x`, and `math` functions), so arbitrary code cannot run.
 - If a team prefers one file per person, move a section into its own file and `import` it. The contract above does not change.
-- Reports are saved next to where you run the program (`laporan_trapesium_<date>.txt`, `laporan_simpson_<date>.txt`, `grafik_trapesium_n<N>.png`, `grafik_simpson_<rule>_n<N>.png`).
+- Reports are saved next to where you run the program (`laporan_trapesium_<date>.txt`, `laporan_simpson_<date>.txt`, `laporan_combined_<date>.txt`, `grafik_trapesium_n<N>.png`, `grafik_simpson_<rule>_n<N>.png`, `grafik_gabungan_simpson_n<N>.png`).

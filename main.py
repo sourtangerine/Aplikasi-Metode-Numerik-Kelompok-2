@@ -3,7 +3,7 @@
 KALKULATOR INTEGRASI NUMERIK  |  Numerical Integration Calculator
 Rumus Newton-Cotes - Metoda Numerik (ITS)
 
-Bahasa / Language / Langue : Indonesia (default), English, Francais
+Language selection: Indonesia (default) or English
 Jalankan / Run             : python main.py            (python main.py --lang en)
 
 FILE LAYOUT (satu file, tiga bagian tim / one file, three team sections)
@@ -37,10 +37,10 @@ except Exception:  # noqa: BLE001
 
 
 # ============================================================================
-# SECTION 0 - TRANSLATIONS   add_strings({"key": ("indonesia", "english", "francais")})
+# SECTION 0 - TRANSLATIONS   selectable languages: Indonesian and English
 # ============================================================================
-LANGS = ["id", "en", "fr"]
-LANG_NAMES = {"id": "Bahasa Indonesia", "en": "English", "fr": "Français"}
+LANGS = ["id", "en"]
+LANG_NAMES = {"id": "Bahasa Indonesia", "en": "English"}
 _STR: Dict[str, Dict[str, str]] = {code: {} for code in LANGS}
 _lang = "id"
 
@@ -67,14 +67,14 @@ add_strings({
                   "CALCULATEUR D'INTÉGRATION NUMÉRIQUE"),
     "app_sub": ("Rumus Newton-Cotes | Metoda Numerik", "Newton-Cotes Formulas | Numerical Methods",
                 "Formules de Newton-Cotes | Méthodes numériques"),
-    "lang_prompt": ("Pilih bahasa / Choose language / Choisissez la langue",) * 3,
+    "lang_prompt": ("Pilih bahasa / Choose language", "Choose language", "Choisissez la langue"),
     "lang_set": ("Bahasa: Indonesia", "Language: English", "Langue : Français"),
     "menu_title": ("MENU UTAMA", "MAIN MENU", "MENU PRINCIPAL"),
     "menu_trap": ("Aturan Trapesium", "Trapezoidal Rule", "Méthode des trapèzes"),
     "menu_simp": ("Aturan Simpson (1/3 dan 3/8)", "Simpson's Rules (1/3 and 3/8)",
                   "Règles de Simpson (1/3 et 3/8)"),
-    "menu_comb": ("Metode Gabungan (Simpson 1/3 + 3/8)", "Combined Method (Simpson 1/3 + 3/8)",
-                  "Méthode combinée (Simpson 1/3 + 3/8)"),
+    "menu_comb": ("Metode Gabungan (Simpson 1/3 + Trapesium)", "Combined Method (Simpson 1/3 + Trapezoid)",
+                  "Méthode combinée (Simpson 1/3 + trapèzes)"),
     "menu_cmp": ("Bandingkan semua metode", "Compare all methods", "Comparer toutes les méthodes"),
     "menu_lang": ("Ganti bahasa", "Change language", "Changer de langue"),
     "menu_exit": ("Keluar", "Exit", "Quitter"),
@@ -1079,24 +1079,239 @@ class SimpsonModule(MethodModule):
 
 
 # ============================================================================
-# SECTION 4 - GABUNGAN / COMBINED  (Simpson 1/3 + 3/8)  Kevin
+# SECTION 4 - GABUNGAN / COMBINED  (Simpson 1/3 + Trapezoid)  Kevin
 # ============================================================================
 add_strings({
-    # Kevin: add your own texts here (same format as above).
+    "comb_title": ("METODE GABUNGAN SIMPSON 1/3 + TRAPESIUM", "COMBINED SIMPSON 1/3 + TRAPEZOID RULE",
+                   "MÉTHODE COMBINÉE SIMPSON 1/3 + TRAPÈZES"),
+    "comb_intro": ("Untuk n genap, seluruh interval memakai Simpson 1/3. Untuk n ganjil, Simpson 1/3 dipakai pada n-1 segmen pertama dan trapesium pada segmen terakhir; n = 1 memakai trapesium.",
+                   "For even n, Simpson 1/3 is used throughout. For odd n, Simpson 1/3 is used on the first n-1 segments and the trapezoid rule on the last; n = 1 uses the trapezoid rule.",
+                   "Pour n pair, Simpson 1/3 est utilisé partout. Pour n impair, Simpson 1/3 est appliqué aux n-1 premiers segments et les trapèzes au dernier ; n = 1 utilise les trapèzes."),
+    "comb_single": ("TRAPÈZE (n = 1)", "TRAPEZOID (n = 1)", "TRAPÈZE (n = 1)"),
+    "comb_13": ("SIMPSON 1/3 GABUNGAN (n = {n} segmen)", "COMPOSITE SIMPSON 1/3 (n = {n} segments)",
+                "SIMPSON 1/3 COMPOSÉ (n = {n} segments)"),
+    "comb_mix": ("SIMPSON 1/3 + TRAPESIUM (n = {n} segmen)", "SIMPSON 1/3 + TRAPEZOID (n = {n} segments)",
+                 "SIMPSON 1/3 + TRAPÈZES (n = {n} segments)"),
+    "comb_formula_trap": ("I ~ (h/2) * [f(x0) + f(x1)]",
+                          "I ~ (h/2) * [f(x0) + f(x1)]",
+                          "I ~ (h/2) * [f(x0) + f(x1)]"),
+    "comb_formula_13": ("I ~ (h/3) * [f(x0) + 4*jumlah f indeks ganjil + 2*jumlah f indeks genap dalam + f(xn)]",
+                        "I ~ (h/3) * [f(x0) + 4*sum of odd-index f + 2*sum of inner even-index f + f(xn)]",
+                        "I ~ (h/3) * [f(x0) + 4*somme des f d'indice impair + 2*somme des f d'indice pair intérieur + f(xn)]"),
+    "comb_formula_mix": ("I ~ I Simpson 1/3 pada {k} segmen pertama + I trapesium pada segmen terakhir",
+                         "I ~ Simpson 1/3 on the first {k} segments + trapezoid on the last segment",
+                         "I ~ Simpson 1/3 sur les {k} premiers segments + trapèze sur le dernier segment"),
+    "comb_sum_13": ("Jumlah berbobot Simpson 1/3 pada bagian pertama = {s}",
+                    "Weighted Simpson 1/3 sum on the first part = {s}",
+                    "Somme pondérée Simpson 1/3 sur la première partie = {s}"),
+    "comb_sum_trap": ("Jumlah nilai ujung trapesium terakhir = {s}",
+                      "Sum of endpoint values for the last trapezoid = {s}",
+                      "Somme des valeurs aux extrémités du dernier trapèze = {s}"),
+    "comb_conv_note": ("n genap memakai Simpson 1/3; n ganjil memakai Simpson 1/3 dan satu segmen trapesium terakhir.",
+                       "Even n uses Simpson 1/3; odd n combines Simpson 1/3 with one final trapezoid segment.",
+                       "n pair utilise Simpson 1/3 ; n impair combine Simpson 1/3 et un dernier segment trapézoïdal."),
+    "comb_basis_est": ("galat estimasi dari perubahan hasil n ke 2n",
+                       "estimated error from the change between n and 2n",
+                       "erreur estimée par la différence entre n et 2n"),
+    "comb_adv_note": ("Tanpa nilai eksak, penasihat memakai perubahan relatif hasil saat jumlah segmen digandakan (n dibandingkan 2n), bukan ekstrapolasi Richardson.",
+                      "Without an exact value, the advisor estimates error from the relative change when doubling segments (n vs 2n), not Richardson extrapolation.",
+                      "Sans valeur exacte, le conseiller estime l'erreur par la variation relative en doublant le nombre de segments (n contre 2n), sans extrapolation de Richardson."),
 })
 
 
 class CombinedModule(MethodModule):
     key = "combined"
     title_key = "menu_comb"
-    owner = "Kevin"     # <- Kevin: write your name
-    implemented = False         # <- set to True when ready
-    progress = 0
+    owner = "Kevin"
+    implemented = True
+    progress = 100
 
-    # Rule from the slides (47): n even -> Simpson 1/3 everywhere;
-    # n odd and n > 1 -> Simpson 3/8 on the last 3 segments + 1/3 on the rest; n = 1 -> trapezoid.
-    # def compute(self, p: Problem, n: int) -> float: ...
-    # def run(self) -> None: ...
+    def compute(self, p: Problem, n: int) -> float:
+        if not 1 <= n <= MAX_N:
+            raise ValueError(t("int_range", lo=1, hi=MAX_N))
+
+        h, _, fs = self.nodes(p, n)
+        if n == 1:
+            return h / 2 * (fs[0] + fs[-1])
+
+        if n % 2 == 0:
+            return (h / 3) * (
+                fs[0]
+                + 4 * math.fsum(fs[1:-1:2])
+                + 2 * math.fsum(fs[2:-1:2])
+                + fs[-1]
+            )
+
+        split = n - 1
+        sum_13_odd = math.fsum(fs[i] for i in range(1, split, 2))
+        sum_13_even = math.fsum(fs[i] for i in range(2, split, 2))
+        integral_13 = (h / 3) * (
+            fs[0] + 4 * sum_13_odd + 2 * sum_13_even + fs[split]
+        )
+        integral_trapezoid = h / 2 * (fs[split] + fs[-1])
+        return integral_13 + integral_trapezoid
+
+    def show(self, p: Problem, n: int) -> None:
+        h, xs, fs = self.nodes(p, n)
+        estimate = self.compute(p, n)
+        if n == 1:
+            title(t("comb_single"))
+            step(t("s_h"), "h = (b - a) / n", f"h = ({fmt(p.b)} - {fmt(p.a)}) / {n} = {fmt(h)}")
+            step(t("s_nodes"), *self.format_nodes(xs, fs))
+            step(t("s_formula"), t("comb_formula_trap"),
+                 f"I ~ ({fmt(h)}/2) * [{fs[0]:.6f} + {fs[-1]:.6f}]",
+                 f"I ~ {estimate:.6f}")
+            f2 = p.avg_second_derivative()
+            if f2 is not None:
+                ea = -(p.b - p.a) ** 3 / 12 * f2
+                say(f"    {t('lbl_f2')} = {f2:.6g}\n    {t('lbl_ea')} = -(b-a)^3 / 12 * f'' = {ea:.6g}\n    {t('ea_note')}")
+        elif n % 2 == 0:
+            title(t("comb_13", n=n))
+            step(t("s_h"), "h = (b - a) / n", f"h = ({fmt(p.b)} - {fmt(p.a)}) / {n} = {fmt(h)}")
+            step(t("s_nodes"), *self.format_nodes(xs, fs))
+            sum_odd = math.fsum(fs[1:-1:2])
+            sum_even = math.fsum(fs[2:-1:2])
+            step(t("s_formula"), t("comb_formula_13"),
+                 t("simp_sum_odd", s=f"{sum_odd:.6f}"),
+                 t("simp_sum_even", s=f"{sum_even:.6f}"),
+                 f"I ~ ({fmt(h)}/3) * [{fs[0]:.6f} + 4*{sum_odd:.6f} + 2*{sum_even:.6f} + {fs[-1]:.6f}]",
+                 f"I ~ {estimate:.6f}")
+            f4 = p.avg_fourth_derivative()
+            if f4 is not None:
+                ea = -(p.b - p.a) * h ** 4 / 180 * f4
+                say(f"    {t('lbl_f4')} = {f4:.6g}\n    {t('lbl_ea')} = -(b-a)h^4 / 180 * f^(4) = {ea:.6g}\n    {t('simp_ea_note')}")
+        else:
+            title(t("comb_mix", n=n))
+            step(t("s_h"), "h = (b - a) / n", f"h = ({fmt(p.b)} - {fmt(p.a)}) / {n} = {fmt(h)}")
+            step(t("s_nodes"), *self.format_nodes(xs, fs))
+            split = n - 1
+            sum_13_odd = math.fsum(fs[i] for i in range(1, split, 2))
+            sum_13_even = math.fsum(fs[i] for i in range(2, split, 2))
+            sum_13_weighted = fs[0] + 4 * sum_13_odd + 2 * sum_13_even + fs[split]
+            sum_trapezoid = fs[split] + fs[-1]
+            step(t("s_formula"), t("comb_formula_mix", k=split),
+                 t("comb_sum_13", s=f"{sum_13_weighted:.6f}"),
+                 t("comb_sum_trap", s=f"{sum_trapezoid:.6f}"),
+                 f"I ~ ({fmt(h)}/3) * {sum_13_weighted:.6f} + ({fmt(h)}/2) * {sum_trapezoid:.6f}",
+                 f"I ~ {estimate:.6f}")
+
+        say(); say(t("s_errors"))
+        rel = show_errors(p, estimate)
+        if rel is not None:
+            abs_rel = abs(rel)
+            step(t("s_interp"), t("simp_interp_excel") if abs_rel < 0.1 else
+                 t("interp_good") if abs_rel < 1 else t("interp_mid") if abs_rel < 5 else t("simp_interp_bad"))
+        say(); say(f">>> {t('result')}: I ~ {estimate:.6f}")
+
+    def convergence(self, p: Problem, ns: Sequence[int]) -> None:
+        super().convergence(p, ns, [1, 2, 3, 4, 5, 6, 8, 10, 16, 20], "comb_conv_note",
+                            " - " + t("menu_comb"))
+
+    def advise(self, p: Problem, tol: float) -> None:
+        title(t("adv_title") + " - " + t("menu_comb"))
+        say(t("adv_target", tol=f"{tol:g}", basis=t("basis_true") if p.exact is not None else t("comb_basis_est")))
+        cache: Dict[int, float] = {}
+
+        def error(n: int) -> float:
+            if n not in cache:
+                estimate = self.compute(p, n)
+                if p.exact is not None:
+                    cache[n] = rel_err_pct(p.exact, estimate)
+                else:
+                    refined = self.compute(p, 2 * n)
+                    cache[n] = rel_err_pct(refined, estimate)
+            return cache[n]
+
+        say(t("adv_n1", e=f"{error(1):.4f}"))
+        if p.exact is None:
+            say(t("comb_adv_note"))
+        if error(1) <= tol:
+            say(t("adv_ok", n=1, e=f"{error(1):.4f}", I=f"{self.compute(p, 1):.6f}"))
+            return
+
+        lo, hi, n, limit = 1, None, 2, 2 ** 16
+        while n <= limit:
+            if error(n) <= tol:
+                hi = n
+                break
+            lo, n = n, n * 2
+        if hi is None:
+            say(t("adv_fail", n=limit, e=f"{error(limit):.4f}"))
+            return
+        while lo + 1 < hi:
+            mid = (lo + hi) // 2
+            if error(mid) <= tol:
+                hi = mid
+            else:
+                lo = mid
+        say(t("adv_ok", n=hi, e=f"{error(hi):.4f}", I=f"{self.compute(p, hi):.6f}"))
+
+    def mpl_plot(self, p: Problem, n: int) -> None:
+        _, xs, fs = self.nodes(p, n)
+        curve_xs: List[float] = []
+        curve_ys: List[float] = []
+
+        def add_interpolated_panel(start: int, width: int, samples: int) -> None:
+            panel_xs, panel_ys = xs[start:start + width + 1], fs[start:start + width + 1]
+            for j in range(samples + 1):
+                x = panel_xs[0] + (panel_xs[-1] - panel_xs[0]) * j / samples
+                y = 0.0
+                for i, (xi, yi) in enumerate(zip(panel_xs, panel_ys)):
+                    basis = 1.0
+                    for k, xk in enumerate(panel_xs):
+                        if k != i:
+                            basis *= (x - xk) / (xi - xk)
+                    y += yi * basis
+                curve_xs.append(x)
+                curve_ys.append(y)
+
+        if n == 1:
+            add_interpolated_panel(0, 1, 40)
+        else:
+            panel_count = (n // 2) if n % 2 == 0 else ((n - 1) // 2 + 1)
+            samples = max(1, min(20, 4000 // panel_count))
+            if n % 2 == 0:
+                for start in range(0, n, 2):
+                    add_interpolated_panel(start, 2, samples)
+            else:
+                split = n - 1
+                for start in range(0, split, 2):
+                    add_interpolated_panel(start, 2, samples)
+                add_interpolated_panel(split, 1, samples)
+
+        self.base_mpl_plot(
+            p, n, f"{t('menu_comb')}  n = {n}   I ~ {self.compute(p, n):.6f}",
+            "gabungan_simpson", curve_xs, curve_ys, fill_color="teal",
+            label_text=t("menu_comb"),
+        )
+
+    def run(self) -> None:
+        while True:
+            LOG.clear()
+            title(t("comb_title"))
+            say(t("comb_intro"))
+            p = ask_problem()
+            ns = ask_n_list("5")
+            tol = ask_tol()
+            step(t("s_problem"), p.label, f"{t('sum_int')} = [{fmt(p.a)}, {fmt(p.b)}]",
+                 f"{t('sum_n')} = {', '.join(map(str, ns))}",
+                 f"{t('sum_exact')} = {p.exact:.7f}" if p.exact is not None else f"{t('sum_exact')} = {t('sum_unknown')}",
+                 f"{t('sum_tol')} = {tol:g}%")
+            max_exact_degree = 1 if any(n % 2 for n in ns) else 3
+            ok, msg = self.applicable(p, max_exact_deg=max_exact_degree)
+            step(t("s_applic"), msg)
+            if ok:
+                try:
+                    for n in ns:
+                        self.show(p, n)
+                    self.convergence(p, ns)
+                    self.advise(p, tol)
+                    say(); say(t("plot_title", n=ns[0])); say(ascii_plot(p, ns[0]))
+                except FunctionError as exc:
+                    ok = False
+                    say(t("applic_no", x=fmt(exc.x), err=exc.msg))
+            if self.post_menu(p, ns, ok, plot_fn=self.mpl_plot) == "back":
+                return
 
 
 # ============================================================================
@@ -1150,7 +1365,7 @@ def choose_language() -> None:
         out(f"  {i}) {LANG_NAMES[code]}")
     while True:
         c = ask(">", "1").lower()
-        if c in ("1", "2", "3") or c in LANGS:
+        if c.isdigit() and 1 <= int(c) <= len(LANGS) or c in LANGS:
             set_lang(LANGS[int(c) - 1] if c.isdigit() else c)
             out(t("lang_set"))
             return
@@ -1202,7 +1417,7 @@ def main_menu() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Numerical integration calculator / Kalkulator integrasi numerik")
-    ap.add_argument("--lang", choices=LANGS, help="id (default), en, fr")
+    ap.add_argument("--lang", choices=LANGS, help="id (default) or en")
     args = ap.parse_args()
     try:
         if args.lang:
