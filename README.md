@@ -6,7 +6,7 @@ One file (`main.py`), no dependencies, three team sections.
 | Section | Method | Status | Owner |
 |---|---|---|---|
 | 2 | **Aturan Trapesium** (single + composite) | ✅ done | Bimo |
-| 3 | **Aturan Simpson** (1/3 and 3/8) | 🚧 coming soon | Ihsan |
+| 3 | **Aturan Simpson** (1/3 and 3/8) | ✅ done | Ihsan |
 | 4 | **Metode Gabungan** (Simpson 1/3 + 3/8) | 🚧 coming soon | Kevin |
 
 Languages: **Bahasa Indonesia** (default), **English**, **Français** — pick at startup or from the main menu.
@@ -58,7 +58,7 @@ Only edit **your own section**; Git merges stay painless. Everything you need is
 | `show_errors(p, estimate)` | prints exact value, `Et`, relative error; returns the relative error |
 | `rel_err_pct(exact, est)` | relative error in % |
 | `t("key")` | translated text for the current language |
-| `p.exact`, `p.poly`, `p.avg_second_derivative()` | exact value (or `None`), polynomial (or `None`), mean of `f''` |
+| `p.exact`, `p.poly`, `p.avg_second_derivative()`, `p.avg_fourth_derivative()` | exact value (or `None`), polynomial (or `None`), mean of `f''`, mean of `f^(4)` |
 
 ### The 3-step contract
 
@@ -85,4 +85,4 @@ Until `implemented = True`, your menu entry shows the **coming soon** screen wit
 
 - Expressions are parsed with Python's `ast` and a whitelist (numbers, `+ - * / ^ %`, `x`, and `math` functions), so arbitrary code cannot run.
 - If a team prefers one file per person, move a section into its own file and `import` it. The contract above does not change.
-- Reports are saved next to where you run the program (`laporan_trapesium_<date>.txt`, `grafik_trapesium_n<N>.png`).
+- Reports are saved next to where you run the program (`laporan_trapesium_<date>.txt`, `laporan_simpson_<date>.txt`, `grafik_trapesium_n<N>.png`, `grafik_simpson_<rule>_n<N>.png`).
